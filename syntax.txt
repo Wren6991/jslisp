@@ -1,0 +1,27 @@
+[tokens]
+
+lparen::= "("
+rparen::= ")"
+number::= %d+
+id::= [a-z_]+
+
+
+[structure]
+
+list::= lparen {number|id} rparen
+
+when executing code:
+
+- code is stored as lists
+- if first item of list is id, retrieve that function and execute it on the cdr.
+- otherwise, throw error.
+- value of evaluated function is passed up, becomes argument to previous expression.
+- function arguments are evaluated recursively. e.g.
+	(print (+ 1 2))
+	-> (print 3)
+	==> 3
+
+
+If a list's car is non-null, its cdr is non-null (i.e. every list ends with an empty list item)
+
+If a list's car is null, its cdr is also null.

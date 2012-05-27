@@ -10,15 +10,15 @@ var t_type = {
 	lparen:		1,
 	rparen:		2,
 	number:		3,
-	id:		4,
-	plus:		5,
-	minus:		6
+	symbol:		4,
+	string: 	5, 
 };
 
 var state = {
 	start:	0,
 	number: 1,
-	id:	2
+	symbol:	2,
+	string: 3
 };
 
 var vars = {};
@@ -32,11 +32,16 @@ var forms = {
 	"if":	true,
 	let:	true,
 	defun:	true,
-	exec:	true,
+	eval:	true,
 	"+":	true,
 	"-":	true,
 	"*":	true,
 	"/":	true,
+	"<":	true, 
+	">":	true, 
+	"<=":	true, 
+	">=":	true,
+	"=":	true
 };
 	
 
@@ -68,6 +73,13 @@ function lambda(varname, expression)
 	this.expression = expression;
 }
 
+function symbol(s)
+{
+	this = s;
+	this.prototype = string.prototype;
+	this.isSymbol = true;
+}
+
 function tokenize(progstring)
 {
 	var length = progstring.length;
@@ -77,6 +89,18 @@ function tokenize(progstring)
 	var tokens = [];
 	var s = 0;
 
+	var operators = {
+		"+":	true, 
+		"-":	true, 
+		"*":	true, 
+		"/":	true, 
+		"<":	true, 
+		">":	true, 
+		"<=":	true, 
+		">=":	true,
+		"=":	true 
+	}; 
+
 	while(pos < length)
 	{
 		v = progstring.charCodeAt(pos);
@@ -84,23 +108,22 @@ function tokenize(progstring)
 		switch(s)
 		{
 			case state.start:
+				regionstart = pos;
 				if (v == "(".charCodeAt(0))
 					tokens.push(new token(t_type.lparen, "("));
 				else if (v == ")".charCodeAt(0))
 					tokens.push(new token(t_type.rparen, ")"));
-				else if (v == "+".charCodeAt(0))
-					tokens.push(new token(t_type.plus, "+"));
-				else if (v == "-".charCodeAt(0))
-					tokens.push(new token(t_type.minus, "-"));
+				else if (operators[String.fromCharCode(v)])
+					tokens.push(new token(t_type.symbol, String.fromCharCode(v)));
+				else if (v == "\"".charCodeAt(0))
+					s = state.string;
 				else if (v >= 48 && v <= 57)					// digits 0 to 9
 				{
-					regionstart = pos;
 					s = state.number;
 				}
 				else if ((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || v == "_".charCodeAt(0))
 				{
-					regionstart = pos;
-					s=state.id;
+					s = state.symbol;
  				}
 				break;
 			case state.number:
@@ -111,13 +134,21 @@ function tokenize(progstring)
 					pos--;
 				}
 				break;
-			case state.id:
+			case state.symbol:
 				if (!((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || v == "_".charCodeAt(0)))	//not a lower case letter or an underscore
 				{
-					tokens.push(new token(t_type.id, progstring.substring(regionstart, pos)));
+					tokens.push(new token(t_type.symbol, progstring.substring(regionstart, pos)));
 					s = state.start
 					pos--;							//decrement the position so the same character gets read again in the start state next cycle
 				}
+				break;
+			case state.string:
+				if (v == "\"".charCodeAt(0))
+				{
+					tokens.push(new token(t_type.string, progstring.substring(regionstart + 1, pos)))
+					s = state.start;
+				}
+				break;
 		}
 		pos++;
 	}
@@ -168,24 +199,26 @@ function parse(tokens)
 	{
 		var head = new list();
 		var tail = head;
-		while (accept(t_type.id) || accept(t_type.number) || accept(t_type.lparen) || accept(t_type.plus) || accept(t_type.minus))
+		while (accept(t_type.symbol) || accept(t_type.number) || accept(t_type.lparen) || accept(t_type.string))
 		{
 			switch(lastt.type)
 			{
-				case t_type.plus:
-				case t_type.minus:
-					tail.car = lastt.value;
-					break;
-				case t_type.id:
+				case t_type.symbol:
 					if (lastt.value == "true")
 						tail.car = true;
 					else if (lastt.value == "false")
 						tail.car = false;
 					else
-						tail.car = lastt.value;
+					{
+						tail.car = new String(lastt.value);
+						tail.car.isSymbol = true;
+					}
+					break;
+				case t_type.string:
+					tail.car = lastt.value;
 					break;
 				case t_type.number:
-					tail.car = parseFloat(lastt.value)
+					tail.car = parseFloat(lastt.value);
 					break;
 				case t_type.lparen:
 					tail.car = readlist();
@@ -212,18 +245,18 @@ function parse(tokens)
 }
 
 
-function evaluate_(expression)
-{
-	var temp = evaluate_(expression);
-	alert("returned " + temp + " (" + typeof(temp) + ")");
-	return temp;
-}
 function evaluate(expression)
 {
-	if (typeof(expression) == "number" || typeof(expression) == "boolean")
+	var temp = evaluate_(expression);
+	//alert("returned " + temp + " (" + typeof(temp) + ")");
+	return temp;
+}
+function evaluate_(expression)
+{
+	if (typeof(expression) == "number" || typeof(expression) == "boolean" || typeof(expression) == "string")
 		return expression;
 
-	if (typeof(expression) == "string")
+	if (expression.isSymbol)
 	{
 		if (forms[expression])
 			return expression;
@@ -259,13 +292,12 @@ function evaluate(expression)
 		return result;
 	}
 	
-	switch(car)
+	switch(String(car))
 	{
 		case "print":
 		{
 			var result = evaluate(expression.cdr.car);
 			document.getElementsByName("Output")[0].value += "Printed: " + result + "\n";
-			alert(result);
 			return result;
 		}
 		case "list":
@@ -289,7 +321,7 @@ function evaluate(expression)
 				return evaluate(expression.cdr.cdr.car);
 			else
 				return evaluate(expression.cdr.cdr.cdr.car);
-		case "exec":
+		case "eval":
 		{
 			var iter = expression.cdr;
 			var result;
@@ -336,6 +368,28 @@ function evaluate(expression)
 			}
 			return total;
 		}
+		case "/":
+		{
+			var tail = expression.cdr;
+			var total = evaluate(tail.car);
+			tail = tail.cdr;
+			while (tail.car)
+			{
+				total = total / evaluate(tail.car);
+				tail = tail.cdr;
+			}
+			return total;
+		}
+		case "<":
+			return evaluate(expression.cdr.car) < evaluate(expression.cdr.cdr.car);
+		case ">":
+			return evaluate(expression.cdr.car) > evaluate(expression.cdr.cdr.car);
+		case "<=":
+			return evaluate(expression.cdr.car) <= evaluate(expression.cdr.cdr.car);
+		case ">=":
+			return evaluate(expression.cdr.car) >= evaluate(expression.cdr.cdr.car);
+		case "=":
+			return evaluate(expression.cdr.car) == evaluate(expression.cdr.cdr.car);
 		default:
 			alert("Undefined form: " + expression.car);
 			return false;
@@ -346,20 +400,13 @@ function execute()
 {
 
 	var progstring = document.getElementsByName("Prog")[0].value;
-	var tokens = tokenize(progstring);
+	var tokens = tokenize(progstring); 	
 
 	var prog = parse(tokens);
 
 	var output = evaluate(prog);
 
 	document.getElementsByName("Output")[0].value += "==> " + output + "\n";
-
-	
-
-	/*for(var i in tokens)
-	{
-		alert(tokens[i].type + ": " + tokens[i].value);
-	}*/
 }
 
 

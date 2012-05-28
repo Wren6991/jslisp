@@ -33,6 +33,7 @@ var forms = {
 	let:	true,
 	defun:	true,
 	eval:	true,
+	quote:	true,
 	"+":	true,
 	"-":	true,
 	"*":	true,
@@ -64,20 +65,6 @@ function lfunc(varnames, expression)
 	this.isFunction = true;
 	this.varnames = varnames;
 	this.expression = expression;
-}
-
-function lambda(varname, expression)
-{
-	this.isLambda = true;
-	this.varname = varname;
-	this.expression = expression;
-}
-
-function symbol(s)
-{
-	this = s;
-	this.prototype = string.prototype;
-	this.isSymbol = true;
 }
 
 function tokenize(progstring)
@@ -245,16 +232,19 @@ function parse(tokens)
 }
 
 
-function evaluate(expression)
+/*function evaluate(expression)
 {
 	var temp = evaluate_(expression);
 	//alert("returned " + temp + " (" + typeof(temp) + ")");
 	return temp;
-}
-function evaluate_(expression)
+}*/
+
+function evaluate(expression)
 {
 	if (typeof(expression) == "number" || typeof(expression) == "boolean" || typeof(expression) == "string")
 		return expression;
+	
+	//Symbols are of type object, so that the isSymbol tag can be added.
 
 	if (expression.isSymbol)
 	{
@@ -321,6 +311,8 @@ function evaluate_(expression)
 				return evaluate(expression.cdr.cdr.car);
 			else
 				return evaluate(expression.cdr.cdr.cdr.car);
+		case "quote":
+			return expression.cdr.car;
 		case "eval":
 		{
 			var iter = expression.cdr;
@@ -416,10 +408,10 @@ function execute()
 
 <body>
 <p>JSLisp</p>
-<textarea name="Prog" rows=7 cols=80>(print 5)</textarea>
+<textarea name="Prog" rows=8 cols=80>(print 5)</textarea>
 <br/>
 <input type=button name="btnExecute" onclick="execute();" value="Run" width=500px>
 <br/>
-<textarea name="Output" rows=2 cols=80></textarea>
+<textarea name="Output" rows=3 cols=80></textarea>
 </body>
 </html>

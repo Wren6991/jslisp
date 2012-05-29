@@ -11,7 +11,7 @@ var t_type = {
 	rparen:		2,
 	number:		3,
 	symbol:		4,
-	string: 	5, 
+	string: 	5 
 };
 
 var state = {
@@ -24,16 +24,20 @@ var state = {
 var vars = {};
 
 var forms = {
-	print:	true,
-	car:	true,
-	cdr:	true,
-	cons:	true,
-	lambda:	true,
-	"if":	true,
-	let:	true,
-	defun:	true,
-	eval:	true,
-	quote:	true,
+	PRINT:	true,
+	CAR:	true,
+	CDR:	true,
+	CONS:	true,
+	LAMBDA:	true,
+	"IF":	true,
+	LET:	true,
+	DEFUN:	true,
+	EVAL:	true,
+	QUOTE:	true,
+	REM:	true,
+	"AND":	true,
+	"OR":	true,
+	"NOT":	true,
 	"+":	true,
 	"-":	true,
 	"*":	true,
@@ -197,7 +201,7 @@ function parse(tokens)
 						tail.car = false;
 					else
 					{
-						tail.car = new String(lastt.value);
+						tail.car = new String(lastt.value.toUpperCase());
 						tail.car.isSymbol = true;
 					}
 					break;
@@ -284,36 +288,44 @@ function evaluate(expression)
 	
 	switch(String(car))
 	{
-		case "print":
+		case "PRINT":
 		{
 			var result = evaluate(expression.cdr.car);
 			document.getElementsByName("Output")[0].value += "Printed: " + result + "\n";
 			return result;
 		}
-		case "list":
+		case "LIST":
 			return expression.cdr;		//no evaluation - we just return the list.
-		case "car":
+		case "CAR":
 			return evaluate(evaluate(expression.cdr.car).car);
-		case "cdr":
+		case "CDR":
 			return evaluate(expression.cdr.car).cdr;
-		case "cons":
+		case "CONS":
 			return new list(evaluate(expression.cdr.car), evaluate(expression.cdr.cdr.car));
-		case "lambda":
+		case "LAMBDA":
 			return new lfunc(expression.cdr.car, expression.cdr.cdr.car);
-		case "let":
+		case "LET":
 			vars[expression.cdr.car] = evaluate(expression.cdr.cdr.car);
 			return vars[expression.cdr.car];
-		case "defun":
+		case "DEFUN":
 			vars[expression.cdr.car] = new lfunc(expression.cdr.cdr.car, expression.cdr.cdr.cdr.car);
 			return vars[expression.cdr.car];
-		case "if":
+		case "IF":
 			if(evaluate(expression.cdr.car))
 				return evaluate(expression.cdr.cdr.car);
 			else
 				return evaluate(expression.cdr.cdr.cdr.car);
-		case "quote":
+		case "QUOTE":
 			return expression.cdr.car;
-		case "eval":
+		case "REM":
+			return evaluate(expression.cdr.car) % evaluate(expression.cdr.cdr.car);
+		case "NOT":
+			return !evaluate(expression.cdr.car);
+		case "AND":
+			return evaluate(expression.cdr.car) && evaluate(expression.cdr.cdr.car);
+		case "OR":
+			return evaluate(expression.cdr.car) || evaluate(expression.cdr.cdr.car);
+		case "EVAL":
 		{
 			var iter = expression.cdr;
 			var result;
@@ -401,17 +413,15 @@ function execute()
 	document.getElementsByName("Output")[0].value += "==> " + output + "\n";
 }
 
-
-
 </script>
 </head>
 
 <body>
 <p>JSLisp</p>
-<textarea name="Prog" rows=8 cols=80>(print 5)</textarea>
+<textarea name="Prog" rows=10 cols=80>((lambda (f a) (f f a)) (lambda (f n) (if (> n 1) (* n (f f (- n 1))) 1)) 5)</textarea>
 <br/>
 <input type=button name="btnExecute" onclick="execute();" value="Run" width=500px>
 <br/>
-<textarea name="Output" rows=3 cols=80></textarea>
+<textarea name="Output" rows=5 cols=80></textarea>
 </body>
 </html>

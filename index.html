@@ -11,7 +11,8 @@ var t_type = {
 	rparen:		2,
 	number:		3,
 	symbol:		4,
-	string: 	5 
+	string:		5,
+	quote:		6
 };
 
 var state = {
@@ -71,6 +72,13 @@ function lfunc(varnames, expression)
 	this.expression = expression;
 }
 
+function symbol(s)
+{
+	var sym = new String(s.toUpperCase());
+	sym.isSymbol = true;
+	return sym;
+}
+
 function tokenize(progstring)
 {
 	var length = progstring.length;
@@ -80,15 +88,13 @@ function tokenize(progstring)
 	var tokens = [];
 	var s = 0;
 
-	var operators = {
+	var characterIsAllowed = {
 		"+":	true, 
 		"-":	true, 
 		"*":	true, 
 		"/":	true, 
 		"<":	true, 
 		">":	true, 
-		"<=":	true, 
-		">=":	true,
 		"=":	true 
 	}; 
 
@@ -104,15 +110,15 @@ function tokenize(progstring)
 					tokens.push(new token(t_type.lparen, "("));
 				else if (v == ")".charCodeAt(0))
 					tokens.push(new token(t_type.rparen, ")"));
-				else if (operators[String.fromCharCode(v)])
-					tokens.push(new token(t_type.symbol, String.fromCharCode(v)));
 				else if (v == "\"".charCodeAt(0))
 					s = state.string;
+ 				else if (v == "'".charCodeAt(0))
+ 					tokens.push(new token(t_type.quote, "'"));
 				else if (v >= 48 && v <= 57)					// digits 0 to 9
 				{
 					s = state.number;
 				}
-				else if ((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || v == "_".charCodeAt(0))
+				else if ((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || characterIsAllowed[String.fromCharCode(v)])
 				{
 					s = state.symbol;
  				}
@@ -126,7 +132,7 @@ function tokenize(progstring)
 				}
 				break;
 			case state.symbol:
-				if (!((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || v == "_".charCodeAt(0)))	//not a lower case letter or an underscore
+				if (!((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || characterIsAllowed[String.fromCharCode(v)]) || pos == length - 1)		//not a lower case letter or an allowed character (+-*/<>=)
 				{
 					tokens.push(new token(t_type.symbol, progstring.substring(regionstart, pos)));
 					s = state.start
@@ -186,11 +192,20 @@ function parse(tokens)
 		}
 	}
 
+	function peek()					// if there is a token then return its type; otherwise null.
+	{
+		if (t)
+			return t.type;
+		else
+			return null;
+	}
+
 	function readlist()
 	{
 		var head = new list();
 		var tail = head;
-		while (accept(t_type.symbol) || accept(t_type.number) || accept(t_type.lparen) || accept(t_type.string))
+		var lastWasQuote;
+		while (accept(t_type.symbol) || accept(t_type.number) || accept(t_type.lparen) || accept(t_type.string) || accept(t_type.quote))
 		{
 			switch(lastt.type)
 			{
@@ -201,8 +216,7 @@ function parse(tokens)
 						tail.car = false;
 					else
 					{
-						tail.car = new String(lastt.value.toUpperCase());
-						tail.car.isSymbol = true;
+						tail.car = symbol(lastt.value);
 					}
 					break;
 				case t_type.string:
@@ -214,36 +228,49 @@ function parse(tokens)
 				case t_type.lparen:
 					tail.car = readlist();
 					break;
+				default:
+					break;
+					
 			}
-			tail.cdr = new list();
-			tail = tail.cdr;
 
+			if (lastWasQuote)
+			{
+				tail.car = new list(symbol("quote"), new list(tail.car));
+			}
+			lastwasQuote = lastt.type == t_type.quote;
 
+			if (!lastWasQuote && peek() != t_type.rparen)			// here lastWasQuote actually refers to the current iteration; if the current item is a quote, we do not add a new list tail.
+			{
+				tail.cdr = new list();
+				tail = tail.cdr;
+			}
 		}
 		expect(t_type.rparen);
 		return head;
 	}
 
 	if (accept(t_type.lparen))
+		return readlist();
+	else if (accept(t_type.quote))
 	{
-		rootnode = readlist();
+		if (accept(t_type.lparen))
+			return new list(symbol("quote"), new list(readlist()));
+		else
+			return new list(symbol("quote"), new list(t.value));
 	}
 	else
-	{
-		rootnode = t.value;
-	}
-	return rootnode;
+		return t.value;
 }
 
 
-/*function evaluate(expression)
+function evaluate(expression)
 {
 	var temp = evaluate_(expression);
 	//alert("returned " + temp + " (" + typeof(temp) + ")");
 	return temp;
-}*/
+}
 
-function evaluate(expression)
+function evaluate_(expression)
 {
 	if (typeof(expression) == "number" || typeof(expression) == "boolean" || typeof(expression) == "string")
 		return expression;
@@ -271,7 +298,7 @@ function evaluate(expression)
 		var temps = {};
 		var name_iter = car.varnames;
 		var arg_iter = expression.cdr;
-		while (name_iter.car && arg_iter.car)
+		while (name_iter && arg_iter)
 		{
 			temps[name_iter.car] = vars[name_iter.car];
 			vars[name_iter.car] = evaluate(arg_iter.car);
@@ -329,7 +356,7 @@ function evaluate(expression)
 		{
 			var iter = expression.cdr;
 			var result;
-			while (iter.car)
+			while (iter)
 			{
 				result = evaluate(iter.car);
 				iter = iter.cdr;
@@ -341,7 +368,7 @@ function evaluate(expression)
 			var tail = expression.cdr;
 			var total = evaluate(tail.car);
 			tail = tail.cdr;
-			while (tail.car)
+			while (tail)
 			{
 				total += evaluate(tail.car);
 				tail = tail.cdr;
@@ -353,7 +380,7 @@ function evaluate(expression)
 			var tail = expression.cdr;
 			var total = evaluate(tail.car);
 			tail = tail.cdr;
-			while (tail.car)
+			while (tail)
 			{
 				total -= evaluate(tail.car);
 				tail = tail.cdr;
@@ -365,7 +392,7 @@ function evaluate(expression)
 			var tail = expression.cdr;
 			var total = evaluate(tail.car);
 			tail = tail.cdr;
-			while (tail.car)
+			while (tail)
 			{
 				total = total * evaluate(tail.car);
 				tail = tail.cdr;
@@ -377,7 +404,7 @@ function evaluate(expression)
 			var tail = expression.cdr;
 			var total = evaluate(tail.car);
 			tail = tail.cdr;
-			while (tail.car)
+			while (tail)
 			{
 				total = total / evaluate(tail.car);
 				tail = tail.cdr;

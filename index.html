@@ -136,6 +136,11 @@ function tokenize(progstring)
 				{
 					s = state.symbol;
  				}
+ 				else if (v == ";".charCodeAt(0))			// start of a comment - loop until new line.
+ 				{
+ 					while (v != 10 && v != 13 && pos < length)
+ 						v = progstring.charCodeAt(++pos);
+ 				}
 				break;
 			case state.number:
 				if (v < 48 || v > 57)						// not a digit

@@ -1,0 +1,34 @@
+; printin' a list:
+
+(defun print-list (lis)
+    (if (cdr lis)
+        (eval (print (car lis)) (print-list (cdr lis)))
+        (print (car lis))
+    )
+)
+
+(print-list (list 1 'two 3))
+
+
+; reversin' a list:
+
+(defun reverse-list (lis rev-lis)
+    (if (null (cdr lis))
+        (cons (car lis) rev-lis)
+        (reverse-list (cdr lis) (cons (car lis) rev-lis))
+    )
+)
+
+(reverse-list '(1 2 3 4 5))
+
+; while loop function:
+
+(defun while (expr body)
+    (if (and (eval expr) (or (eval body) true))
+        (while body expr)
+    )
+)
+
+(let i 0)
+
+(while '(< i 10) '(print (let i (+ i 1))))

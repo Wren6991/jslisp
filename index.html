@@ -36,6 +36,7 @@ var forms = {
 	EVAL:	true,
 	QUOTE:	true,
 	REM:	true,
+	LIST:	true,
 	"AND":	true,
 	"OR":	true,
 	"NOT":	true,
@@ -55,7 +56,13 @@ function list(car, cdr)
 {
 	this.car = car;
 	this.cdr = cdr;
+	this.isList = true;
 	return this;
+}
+
+list.prototype.toString = function()
+{
+	return "(" + this.car + (this.cdr ? " " + this.cdr  : "") + ")";
 }
 
 function token(type, value)
@@ -132,11 +139,11 @@ function tokenize(progstring)
 				}
 				break;
 			case state.symbol:
-				if (!((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || characterIsAllowed[String.fromCharCode(v)]) || pos == length - 1)		//not a lower case letter or an allowed character (+-*/<>=)
+				if (!((v >= "a".charCodeAt(0) && v <= "z".charCodeAt(0)) || characterIsAllowed[String.fromCharCode(v)]) || pos == length - 1)		// not a lower case letter or an allowed character (+-*/<>=)
 				{
-					tokens.push(new token(t_type.symbol, progstring.substring(regionstart, pos)));
+					tokens.push(new token(t_type.symbol, progstring.substring(regionstart, pos)));					// we step an extra character if the halt is because of EOF
 					s = state.start
-					pos--;							//decrement the position so the same character gets read again in the start state next cycle
+					pos--;								// decrement the position so the same character gets read again in the start state next cycle
 				}
 				break;
 			case state.string:
@@ -237,7 +244,8 @@ function parse(tokens)
 			{
 				tail.car = new list(symbol("quote"), new list(tail.car));
 			}
-			lastwasQuote = lastt.type == t_type.quote;
+
+			lastWasQuote = lastt.type == t_type.quote;
 
 			if (!lastWasQuote && peek() != t_type.rparen)			// here lastWasQuote actually refers to the current iteration; if the current item is a quote, we do not add a new list tail.
 			{
@@ -249,17 +257,25 @@ function parse(tokens)
 		return head;
 	}
 
+
+	var isQuoted = accept(t_type.quote);
+	var rootnode;
+
 	if (accept(t_type.lparen))
-		return readlist();
-	else if (accept(t_type.quote))
-	{
-		if (accept(t_type.lparen))
-			return new list(symbol("quote"), new list(readlist()));
-		else
-			return new list(symbol("quote"), new list(t.value));
-	}
+		rootnode = readlist();
+	else if (accept(t_type.symbol))
+		rootnode = symbol(lastt.value);
+	else if (accept(t_type.string))
+		rootnode = lastt.value;
+	else if (accept(t_type.number))
+		rootnode = parseFloat(lastt.value);
 	else
-		return t.value;
+		alert("Huh?! that shouldn't be here.");
+
+	if (isQuoted)
+		rootnode = new list(symbol("quote"), new list(rootnode));
+	
+	return rootnode;
 }
 
 
@@ -322,7 +338,22 @@ function evaluate_(expression)
 			return result;
 		}
 		case "LIST":
-			return expression.cdr;		//no evaluation - we just return the list.
+		{					// we need to evaluate each item on the list first - hence we build a new list of eval'd cars.
+			var newhead;
+			if (expression.cdr.car)
+				newhead = new list(evaluate(expression.cdr.car));
+			
+			var newtail = newhead;
+			var tail = expression.cdr.cdr;
+			while (tail)
+			{
+				newtail.cdr = new list();			// tag a new cons to the end
+				newtail = newtail.cdr;				// make this new cons the tail of the evaluated list
+				newtail.car = evaluate(tail.car);
+				tail = tail.cdr;
+			}
+			return newhead;
+		}
 		case "CAR":
 			return evaluate(evaluate(expression.cdr.car).car);
 		case "CDR":

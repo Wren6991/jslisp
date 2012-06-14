@@ -37,9 +37,10 @@ var forms = {
 	QUOTE:	true,
 	REM:	true,
 	LIST:	true,
-	"AND":	true,
-	"OR":	true,
-	"NOT":	true,
+	NULL:	true,
+	AND:	true,
+	OR:		true,
+	NOT:	true,
 	"+":	true,
 	"-":	true,
 	"*":	true,
@@ -79,6 +80,11 @@ function lfunc(varnames, expression)
 	this.expression = expression;
 }
 
+lfunc.prototype.toString = function()
+{
+	return "Interpreted function: arguments: " + this.varnames;
+}
+
 function symbol(s)
 {
 	var sym = new String(s.toUpperCase());
@@ -102,7 +108,8 @@ function tokenize(progstring)
 		"/":	true, 
 		"<":	true, 
 		">":	true, 
-		"=":	true 
+		"=":	true,
+		"!":	true
 	}; 
 
 	while(pos < length)
@@ -257,25 +264,32 @@ function parse(tokens)
 		return head;
 	}
 
+	var expressions = [];
+	while (t)
+	{
+		var isQuoted = accept(t_type.quote);
+		var node;
 
-	var isQuoted = accept(t_type.quote);
-	var rootnode;
+		if (accept(t_type.lparen))
+			node = readlist();
+		else if (accept(t_type.symbol))
+			node = symbol(lastt.value);
+		else if (accept(t_type.string))
+			node = lastt.value;
+		else if (accept(t_type.number))
+			node = parseFloat(lastt.value);
+		else
+		{
+			alert("Huh?! that shouldn't be here. (\"" + t.value + "\" at token " + index + ")");
+		break;
+		}
+		if (isQuoted)
+			node = new list(symbol("quote"), new list(node));
+		
+		expressions.push(node);
+	}
 
-	if (accept(t_type.lparen))
-		rootnode = readlist();
-	else if (accept(t_type.symbol))
-		rootnode = symbol(lastt.value);
-	else if (accept(t_type.string))
-		rootnode = lastt.value;
-	else if (accept(t_type.number))
-		rootnode = parseFloat(lastt.value);
-	else
-		alert("Huh?! that shouldn't be here.");
-
-	if (isQuoted)
-		rootnode = new list(symbol("quote"), new list(rootnode));
-	
-	return rootnode;
+	return expressions;
 }
 
 
@@ -288,10 +302,10 @@ function evaluate(expression)
 
 function evaluate_(expression)
 {
-	if (typeof(expression) == "number" || typeof(expression) == "boolean" || typeof(expression) == "string")
+	if (typeof(expression) == "number" || typeof(expression) == "boolean" || typeof(expression) == "string" || typeof(expression) == "undefined")
 		return expression;
 	
-	//Symbols are of type object, so that the isSymbol tag can be added.
+	//Symbols are of type object, so that the isSymbol tag can be added. (=> they don't have type string)
 
 	if (expression.isSymbol)
 	{
@@ -312,14 +326,21 @@ function evaluate_(expression)
 	if (car.isFunction)
 	{
 		var temps = {};
+		var argvals = {};
 		var name_iter = car.varnames;
 		var arg_iter = expression.cdr;
 		while (name_iter && arg_iter)
 		{
 			temps[name_iter.car] = vars[name_iter.car];
-			vars[name_iter.car] = evaluate(arg_iter.car);
+			argvals[name_iter.car] = evaluate(arg_iter.car);
 			name_iter = name_iter.cdr;
 			arg_iter = arg_iter.cdr;
+		}
+		for (name in argvals)
+		{
+			vars[name] = argvals[name];	
+			// we need to evaluate all of the arguments before changing the global state; 
+			// otherwise there are subtle side-effects (args being changed as they are init'd)
 		}
 		var result = evaluate(car.expression);
 		for (name in temps)
@@ -355,7 +376,7 @@ function evaluate_(expression)
 			return newhead;
 		}
 		case "CAR":
-			return evaluate(evaluate(expression.cdr.car).car);
+			return evaluate(expression.cdr.car).car;
 		case "CDR":
 			return evaluate(expression.cdr.car).cdr;
 		case "CONS":
@@ -373,6 +394,11 @@ function evaluate_(expression)
 				return evaluate(expression.cdr.cdr.car);
 			else
 				return evaluate(expression.cdr.cdr.cdr.car);
+		case "NULL":
+		{
+			var cdr = evaluate(expression.cdr.car);
+			return typeof(cdr) == "undefined" || (cdr.isList && !cdr.car);	// true if undefined or empty list.
+		}
 		case "QUOTE":
 			return expression.cdr.car;
 		case "REM":
@@ -389,8 +415,8 @@ function evaluate_(expression)
 			var result;
 			while (iter)
 			{
-				result = evaluate(iter.car);
-				iter = iter.cdr;
+				result = evaluate(evaluate(iter.car));		//evaluate twice. (eval '(+ 1 2)) => (+ 1 2) => 3
+				iter = iter.cdr;							//because fetching the argument already implies a needed evaluation
 			}
 			return result;
 		}
@@ -464,11 +490,13 @@ function execute()
 	var progstring = document.getElementsByName("Prog")[0].value;
 	var tokens = tokenize(progstring); 	
 
-	var prog = parse(tokens);
+	var expressions = parse(tokens);
 
-	var output = evaluate(prog);
-
-	document.getElementsByName("Output")[0].value += "==> " + output + "\n";
+	for (i in expressions)
+	{
+		var output = evaluate(expressions[i]);
+		document.getElementsByName("Output")[0].value += "==> " + output + "\n";
+	}
 }
 
 </script>

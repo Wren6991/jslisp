@@ -32,3 +32,27 @@
 (let i 0)
 
 (while '(< i 10) '(print (let i (+ i 1))))
+
+; closures:
+
+(defun getadder (n) (lambda (x) (+ x n)))
+
+(let addfive (getadder 5))
+
+(addfive 6)
+
+(((lambda (x) (lambda () (print x))) "hello"))
+
+
+; More stuff:
+
+(defun combine (f)
+  (lambda (x y)
+    (if (null x)
+        '()
+        (f (list (car x) (car y))
+           ((combine f) (cdr x) (cdr y))
+        )
+    )
+  )
+)

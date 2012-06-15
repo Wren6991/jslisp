@@ -31,6 +31,7 @@ var forms = {
 	"IF":	true,
 	LET:	true,
 	DEFUN:	true,
+	BEGIN:	true,
 	EVAL:	true,
 	QUOTE:	true,
 	REM:	true,
@@ -426,6 +427,17 @@ function evaluate_(expression)
 			return evaluate(expression.cdr.car) && evaluate(expression.cdr.cdr.car);
 		case "OR":
 			return evaluate(expression.cdr.car) || evaluate(expression.cdr.cdr.car);
+		case "BEGIN":
+		{
+			var iter = expression.cdr;
+			var result;
+			while (iter)
+			{
+				result = evaluate(iter.car);
+				iter = iter.cdr;
+			}
+			return result;
+		}
 		case "EVAL":
 		{
 			var iter = expression.cdr;

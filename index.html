@@ -22,8 +22,6 @@ var state = {
 	string: 3
 };
 
-var vars = {};
-
 var forms = {
 	PRINT:	true,
 	CAR:	true,
@@ -53,6 +51,24 @@ var forms = {
 };
 	
 
+function environment(parent)
+{
+	this.parent = parent;		
+	this.vars = {};
+
+	this.get = function(name)
+	{
+		if (typeof(this.vars[name]) != "undefined")
+			return this.vars[name];
+		if (this.parent)
+			return this.parent.get(name);
+		return undefined;
+	}
+}
+
+var env = new environment();
+var globalenv = env;
+
 function list(car, cdr)
 {
 	this.car = car;
@@ -73,16 +89,17 @@ function token(type, value)
 	return this;
 }
 
-function lfunc(varnames, expression)
+function lfunc(varnames, expression, env)
 {
 	this.isFunction = true;
 	this.varnames = varnames;
 	this.expression = expression;
+	this.closure = env;
 }
 
 lfunc.prototype.toString = function()
 {
-	return "Interpreted function: arguments: " + this.varnames;
+	return "<Interpreted function>\narguments: " + this.varnames + "\nbody: " + this.expression;
 }
 
 function symbol(s)
@@ -317,7 +334,8 @@ function evaluate_(expression)
 		if (forms[expression])
 			return expression;
 		else
-			return vars[expression];
+			var retval = env.get(expression);
+		return retval;
 	}
 
 	if (!expression.car)
@@ -330,28 +348,22 @@ function evaluate_(expression)
 
 	if (car.isFunction)
 	{
-		var temps = {};
+		var externalenv = env;
+		var newenv = new environment(car.closure);
 		var argvals = {};
 		var name_iter = car.varnames;
 		var arg_iter = expression.cdr;
 		while (name_iter && arg_iter)
 		{
-			temps[name_iter.car] = vars[name_iter.car];
-			argvals[name_iter.car] = evaluate(arg_iter.car);
+			newenv.vars[name_iter.car] = evaluate(arg_iter.car);
 			name_iter = name_iter.cdr;
 			arg_iter = arg_iter.cdr;
 		}
-		for (name in argvals)
-		{
-			vars[name] = argvals[name];	
-			// we need to evaluate all of the arguments before changing the global state; 
-			// otherwise there are subtle side-effects (args being changed as they are init'd)
-		}
+
+		env = newenv;
 		var result = evaluate(car.expression);
-		for (name in temps)
-		{
-			vars[name] = temps[name];
-		}
+		env = externalenv;
+
 		return result;
 	}
 	
@@ -387,13 +399,13 @@ function evaluate_(expression)
 		case "CONS":
 			return new list(evaluate(expression.cdr.car), evaluate(expression.cdr.cdr.car));
 		case "LAMBDA":
-			return new lfunc(expression.cdr.car, expression.cdr.cdr.car);
+			return new lfunc(expression.cdr.car, expression.cdr.cdr.car, env);
 		case "LET":
-			vars[expression.cdr.car] = evaluate(expression.cdr.cdr.car);
-			return vars[expression.cdr.car];
+			env.vars[expression.cdr.car] = evaluate(expression.cdr.cdr.car);
+			return env.vars[expression.cdr.car];
 		case "DEFUN":
-			vars[expression.cdr.car] = new lfunc(expression.cdr.cdr.car, expression.cdr.cdr.cdr.car);
-			return vars[expression.cdr.car];
+			globalenv.vars[expression.cdr.car] = new lfunc(expression.cdr.cdr.car, expression.cdr.cdr.cdr.car, env);
+			return globalenv.vars[expression.cdr.car];
 		case "IF":
 			if(evaluate(expression.cdr.car))
 				return evaluate(expression.cdr.cdr.car);
@@ -509,7 +521,16 @@ function execute()
 
 <body>
 <p>JSLisp</p>
-<textarea name="Prog" rows=10 cols=80>((lambda (f a) (f f a)) (lambda (f n) (if (> n 1) (* n (f f (- n 1))) 1)) 5)</textarea>
+<textarea name="Prog" rows=10 cols=80>(
+  (lambda (f a) (f f a))
+  (lambda (f n)
+    (if (> n 1)
+        (* n (f f (- n 1)))
+        1
+    )
+  )
+  5
+)</textarea>
 <br/>
 <input type=button name="btnExecute" onclick="execute();" value="Run" width=500px>
 <br/>
